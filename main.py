@@ -50,10 +50,11 @@ def start(update, context):
 def order(update, context):
     message = update.message.text
     try:
-        order = co.instance.get_order(message.replace(' ', ''))
-    except ValueError as e:
+        o = co.instance.get_order(message.split(' ')[1])
+    except Exception as e:
         update.message.reply_text(f"Error: {e}")
-    update.message.reply_text(f"Your order is {order}")
+        return
+    update.message.reply_text(f"Your order is: {o}")
 
 
 def error(update, context):
@@ -63,9 +64,15 @@ def error(update, context):
 
 def table(update, context):
     message = update.message.text
+
     url = re.search("(?P<url>https?://[^\s]+)", message).group("url")
 
-    co.instance.set_table(url)
+    try:
+        co.instance.set_table(url)
+    except Exception as e:
+        update.message.reply_text(f"Could not part table, error: {e}")
+        return
+
 
     chat_id = update.message.chat_id
     job_queue: JobQueue = context.job_queue
@@ -101,8 +108,8 @@ def main():
 
     # on different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("order", order))
+    dp.add_handler(CommandHandler("table", table))
 
     # log all errors
     dp.add_error_handler(error)
