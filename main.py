@@ -22,6 +22,7 @@ from telegram.ext.jobqueue import JobQueue
 import datetime
 import yaml
 import re
+from current_order import CurrentOrder
 
 with open('env_params.yml') as f:
     params = yaml.load(f, Loader=yaml.FullLoader)
@@ -32,14 +33,9 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 logger = logging.getLogger(__name__)
 
-
-class Days(object):
-    MON, TUE, WED, THU, FRI, SAT, SUN = range(7)
-    EVERY_DAY = tuple(range(7))
-    WEEKDAYS = tuple(range(5))
-
-
 TOKEN = params['token']
+
+co = CurrentOrder()
 
 
 # Define a few command handlers. These usually take the two arguments update and
@@ -51,22 +47,13 @@ def start(update, context):
     )
 
 
-
 def order(update, context):
-    if datetime.datetime.today().weekday() > 4:
-        update.message.reply_text(f"It's weekend!")
-        return
-    if not timeout.check(update, context):
-        # fuck_you(update)
-        return
-    update.message.reply_text(f"Today's cleaner: {pq.get()}")
-
-
-def participants(update, context):
-    if not timeout.check(update, context):
-        # fuck_you(update)
-        return
-    update.message.reply_text(f"Current participants are: {PARTICIPANTS}")
+    message = update.message.text
+    try:
+        order = co.instance.get_order(message.replace(' ', ''))
+    except ValueError as e:
+        update.message.reply_text(f"Error: {e}")
+    update.message.reply_text(f"Your order is {order}")
 
 
 def error(update, context):
@@ -78,8 +65,28 @@ def table(update, context):
     message = update.message.text
     url = re.search("(?P<url>https?://[^\s]+)", message).group("url")
 
-    update.message.reply_text(f"Table has been set for today!")
+    co.instance.set_table(url)
 
+    chat_id = update.message.chat_id
+    job_queue: JobQueue = context.job_queue
+
+    new_job = job_queue.run_once(
+        callback=clean_table,
+        when=datetime.time(hour=23, minute=29),
+        context=chat_id
+    )
+    context.chat_data['job'] = new_job
+
+    update.message.reply_text(f"Table has been set for today! It will be deleted at midnight")
+
+
+def clean_table(_):
+    """
+    Setting current table to None
+    :param _:  context, useless here
+    :return:
+    """
+    co.instance.clear_table()
 
 
 def main():
@@ -94,9 +101,8 @@ def main():
 
     # on different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("cleaner", cleaner))
-    dp.add_handler(CommandHandler("participants", participants))
-    dp.add_handler(CommandHandler("skip", skip))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("start", start))
 
     # log all errors
     dp.add_error_handler(error)

@@ -22,13 +22,20 @@ class CurrentOrder:
             self._table = None
 
         def get_order(self, user_name):
+
+            if self._table is None:
+                raise ValueError('Table does not set! ')
+
             users = extract_users(self._table)
             items = extract_items(self._table)
+
+            if user_name not in users:
+                raise ValueError(f'Unknown user <{user_name}>')
 
             user_items = items[users[user_name] == BUY_EVENT_MARKER].tolist()
             return user_items
 
-    instance = None
+    instance: __CurrentOrder = None
 
     def __init__(self, participants_list=List[str], start_index=0):
         if not self.instance:
